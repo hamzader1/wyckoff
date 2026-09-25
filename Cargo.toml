@@ -1,0 +1,32 @@
+[package]
+name = "wyckoff"
+version = "0.1.0"
+edition = "2024"
+description = "Commit messages written from your staged diff, in your own voice. No templates, no prefixes."
+license = "MIT"
+keywords = ["git", "commit", "cli", "llm"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "wyckoff"
+path = "src/main.rs"
+
+[dependencies]
+blake3 = "1.8"
+clap = { version = "4.6", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+toml = "1.1"
+# TLS (rustls) and gzip are default features; only JSON needs enabling.
+ureq = { version = "3.4", features = ["json"] }
+
+[dev-dependencies]
+tempfile = "3.27"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+
