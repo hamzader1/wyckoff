@@ -36,18 +36,25 @@ impl ParsedDiff {
         self.files.iter().map(|f| f.deletions).sum()
     }
 
+    /// Every path the change touches, once each.
+    ///
+    /// A new file's `old_path` is the same string as its `path` (both come from
+    /// the `diff --git a/x b/x` header), and a rename contributes two different
+    /// ones, so dedupe rather than trusting the shape.
     pub fn paths(&self) -> Vec<String> {
-        self.files
-            .iter()
-            .flat_map(|f| {
-                let mut v = vec![f.path.clone()];
-                if let Some(old) = &f.old_path {
-                    v.push(old.clone());
+        let mut seen = std::collections::HashSet::new();
+        let mut out = Vec::new();
+        for file in &self.files {
+            for path in [Some(&file.path), file.old_path.as_ref()]
+                .into_iter()
+                .flatten()
+            {
+                if !path.is_empty() && seen.insert(path.clone()) {
+                    out.push(path.clone());
                 }
-                v
-            })
-            .filter(|p| !p.is_empty())
-            .collect()
+            }
+        }
+        out
     }
 
     /// Files grouped by kind. Order inside a group follows the diff order.

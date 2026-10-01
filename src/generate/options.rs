@@ -31,6 +31,10 @@ pub struct Options {
     pub repair: bool,
     pub diff_context_lines: u32,
     pub prompt_extra: Option<String>,
+    /// Override the provider's configured HTTP timeout.
+    pub timeout_secs: Option<u64>,
+    /// Set by the interactive retry: the message the author rejected.
+    pub previous_attempt: Option<String>,
 }
 
 impl Options {
@@ -78,6 +82,8 @@ impl Options {
             repair: settings.repair,
             diff_context_lines: settings.diff_context_lines,
             prompt_extra: settings.prompt_extra.clone(),
+            timeout_secs: args.timeout,
+            previous_attempt: None,
         }
     }
 

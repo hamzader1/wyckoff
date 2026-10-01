@@ -42,7 +42,7 @@ pub fn dispatch(cli: cli::Cli) -> Result<i32> {
         Some(Command::Commit(args)) => generate_command(&args, true, Mode::Message),
         Some(Command::Explain(args)) => generate_command(&args, false, Mode::Explain),
         None => {
-            let commit = cli.generate.commit || cli.generate.amend;
+            let commit = cli.generate.commit || cli.generate.amend || cli.generate.yes;
             generate_command(&cli.generate, commit, Mode::Message)
         }
     }
@@ -75,6 +75,13 @@ fn generate_command(args: &GenerateArgs, commit: bool, mode: Mode) -> Result<i32
             output::print_meta(&outcome.meta);
         }
         return Ok(0);
+    }
+
+    // A human is watching: report what happened, then let them decide. Skipped
+    // for `--json`, `--yes`, `wyckoff commit`, and whenever stdout or stderr is
+    // not a terminal (so scripts, tests and the git hook are untouched).
+    if !args.json && !args.quiet && !commit && !args.yes && crate::ui::interactive() {
+        return review_loop(&git, &config, &settings, args, &mut options, outcome);
     }
 
     if args.json {
@@ -126,6 +133,70 @@ fn generate_command(args: &GenerateArgs, commit: bool, mode: Mode) -> Result<i32
     }
     output::commit(&git, &outcome.text, &extra)?;
     Ok(0)
+}
+
+/// The interactive review: report, ask, and act on the answer.
+///
+/// This is the loop the tool is meant to be used through: the model's line is a
+/// proposal, never a verdict, so the author gets the last word — commit it, drop
+/// it, rewrite it in their own editor, or ask for a different one.
+fn review_loop(
+    git: &Git,
+    config: &Config,
+    settings: &Settings,
+    args: &GenerateArgs,
+    options: &mut Options,
+    mut outcome: generate::Outcome,
+) -> Result<i32> {
+    crate::ui::report_staged(&outcome.staged_paths);
+    crate::ui::report_timing(outcome.elapsed, &outcome.meta);
+
+    loop {
+        crate::ui::print_message(&outcome.text);
+        crate::ui::report_issues(&outcome.issues);
+
+        let choice = crate::ui::ask()
+            .map_err(|error| Error::msg(format!("could not read your answer: {error}")))?;
+
+        match choice {
+            crate::ui::Choice::Yes => {
+                crate::ui::close();
+                commit_now(git, settings, args.amend, &outcome.text)?;
+                return Ok(0);
+            }
+            crate::ui::Choice::No => {
+                crate::ui::report_aborted();
+                crate::ui::close();
+                return Ok(0);
+            }
+            crate::ui::Choice::Edit => {
+                let edited = crate::ui::edit(&outcome.text)
+                    .map_err(|error| Error::msg(format!("could not open your editor: {error}")))?;
+                match edited {
+                    Some(text) => {
+                        // The author's own words are not up for review.
+                        outcome.text = text.trim_end().to_string();
+                        outcome.issues.clear();
+                        crate::ui::report_note("using your text as-is");
+                    }
+                    None => crate::ui::report_note("nothing changed"),
+                }
+            }
+            crate::ui::Choice::Retry => {
+                options.previous_attempt = Some(outcome.text.clone());
+                outcome = generate::run(git, config, options)?;
+                crate::ui::report_timing(outcome.elapsed, &outcome.meta);
+            }
+        }
+    }
+}
+
+fn commit_now(git: &Git, settings: &Settings, amend: bool, text: &str) -> Result<()> {
+    let mut extra = settings.extra_commit_args.clone();
+    if amend && !extra.iter().any(|arg| arg == "--amend") {
+        extra.push("--amend".to_string());
+    }
+    output::commit(git, text, &extra)
 }
 
 fn init_command(args: &cli::InitArgs) -> Result<i32> {

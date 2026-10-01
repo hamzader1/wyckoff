@@ -93,6 +93,7 @@ pub fn request(
             extra_instructions: options.prompt_extra.as_deref(),
             max_output_tokens: 700,
             style_override: options.forced_style(),
+            previous_attempt: options.previous_attempt.as_deref(),
         },
         rendered,
     );

@@ -33,6 +33,8 @@ pub struct Inputs<'a> {
     pub rendered_diff: &'a RenderedDiff,
     /// `--style plain|conventional` beats what the history says.
     pub style_override: Option<crate::style::Style>,
+    /// A message the author already rejected (interactive retry).
+    pub previous_attempt: Option<&'a str>,
 }
 
 #[derive(Debug, Clone)]
@@ -43,6 +45,7 @@ pub struct Options<'a> {
     pub extra_instructions: Option<&'a str>,
     pub max_output_tokens: u32,
     pub style_override: Option<crate::style::Style>,
+    pub previous_attempt: Option<&'a str>,
 }
 
 impl Default for Options<'_> {
@@ -54,6 +57,7 @@ impl Default for Options<'_> {
             extra_instructions: None,
             max_output_tokens: 700,
             style_override: None,
+            previous_attempt: None,
         }
     }
 }
@@ -87,6 +91,7 @@ pub fn build<'a>(
         extra_instructions: options.extra_instructions,
         rendered_diff,
         style_override: options.style_override,
+        previous_attempt: options.previous_attempt,
     };
     Request {
         system: system(&inputs),

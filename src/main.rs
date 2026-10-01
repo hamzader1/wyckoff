@@ -22,6 +22,7 @@ mod secrets;
 mod style;
 mod symbols;
 mod tokens;
+mod ui;
 mod util;
 mod validate;
 

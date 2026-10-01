@@ -101,6 +101,14 @@ pub struct GenerateArgs {
     #[arg(long)]
     pub allow_secrets: bool,
 
+    /// Commit without asking: skips the interactive review prompt.
+    #[arg(short = 'y', long)]
+    pub yes: bool,
+
+    /// HTTP timeout in seconds for the provider call.
+    #[arg(long)]
+    pub timeout: Option<u64>,
+
     /// Extra paths whose diffs are never sent (glob-lite).
     #[arg(long = "exclude")]
     pub exclude: Vec<String>,

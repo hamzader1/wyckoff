@@ -119,6 +119,17 @@ pub fn user(inputs: &Inputs<'_>) -> String {
         out.push_str("\n(prefer this over anything you infer)\n\n");
     }
 
+    if let Some(previous) = inputs.previous_attempt
+        && !previous.trim().is_empty()
+    {
+        out.push_str("## A previous attempt the author did not want\n");
+        out.push_str(previous.trim());
+        out.push_str(
+            "\n\nWrite a different message: same rules, different wording and angle. \
+             Do not repeat that sentence.\n\n",
+        );
+    }
+
     out.push_str("## Staged change\n");
     out.push_str(&inputs.rendered_diff.text);
 

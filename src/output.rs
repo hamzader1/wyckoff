@@ -26,6 +26,8 @@ pub struct Meta {
     pub diff_included: usize,
     pub diff_omitted: usize,
     pub diff_summarized: usize,
+    /// Seconds spent waiting on the provider.
+    pub analysis_secs: f64,
 }
 
 pub fn print_message(text: &str, quiet: bool) {
@@ -74,6 +76,10 @@ pub fn print_meta(meta: &Meta) {
     eprintln!(
         "cache: {} hit(s), {} miss(es)",
         meta.cache_hits, meta.cache_misses
+    );
+    eprintln!(
+        "analysis: {:.1}s (provider call + repair)",
+        meta.analysis_secs
     );
     if !meta.usage.is_empty() {
         eprintln!("usage: {}", meta.usage);

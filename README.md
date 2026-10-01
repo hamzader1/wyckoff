@@ -179,6 +179,40 @@ It is also read from `.context/` directories and from any `.context` next to the
 files you changed, so a monorepo can have one per package. If you already have
 `AGENTS.md` or `CLAUDE.md`, that is used as a fallback.
 
+## Interactive by default
+
+Run `wyckoff` with a terminal attached and it reports what it did, then asks:
+
+```
+◇  📁  Detected 3 staged files
+      src/backend/executor/filter.rs
+      src/backend/executor/scan_guard.rs
+      src/backend/executor/tablescan.rs
+│
+◇  ✅  Changes analyzed in 7.8s
+      cline · minimax/minimax-m2.5 · ~3k tokens
+│
+
+  Rename scan modes to Safe/Unsafe, add Filter::into_child and rename predicate fields
+
+? Use this commit message? ›
+❯ Yes, commit this
+  No, abort
+  Edit in $EDITOR
+  Retry, ask again
+```
+
+- **Yes** commits with it (your `extra_commit_args` and `--amend` still apply)
+- **No** aborts; nothing is committed
+- **Edit** opens `$VISUAL`/`$EDITOR` (vim when unset) on the message; your text is
+  then used as-is, without further review
+- **Retry** asks the model again, *telling it which message you rejected*, so it
+  writes something different instead of repeating itself
+
+Nothing decorative appears when nobody is watching: if stdout is not a terminal
+(a pipe, a script, a test, the git hook), wyckoff prints the message and exits.
+`--yes`, `wyckoff commit`, `--json` and `-q` all skip the question too.
+
 ## Telling it *why*: `-I "..."`
 
 The diff contains *what* changed, never *why*. Without intent the model is only
@@ -236,6 +270,8 @@ Options for `wyckoff`, `wyckoff commit` and `wyckoff explain`:
 | `--max-len <N>` | subject length cap (default 120) |
 | `--commit` | commit with the message (same as the `commit` subcommand) |
 | `--amend` | amend the previous commit (implies `--commit`) |
+| `-y, --yes` | commit without asking (skips the review prompt) |
+| `--timeout <SECS>` | HTTP timeout for the provider call (default 120) |
 | `--dry-run` | print the exact request that would be sent, send nothing |
 | `--json` | machine-readable output |
 | `--copy` | also copy the message to the clipboard |
@@ -299,6 +335,33 @@ the hook never fails a commit.
 
 (`wyckoff hook-fill <file>` is what the hook itself calls. You never need it by
 hand, but it is what to run if you want to debug the hook path.)
+
+## Speed
+
+wyckoff's own work is milliseconds; the wait is the model. Measured on this
+machine with 17 staged files:
+
+```
+wyckoff --version          3.1 ms
+git diff --cached --raw    ~10 ms
+git log -n40 --name-only   ~15 ms
+```
+
+So when a run takes a minute, that minute is the provider thinking. The spinner
+shows the elapsed time while you wait, and `--stats` prints it afterwards as
+`analysis: 63.4s`. In order of effect:
+
+1. **Use a model that does not reason, for a one-line message.** This is the big
+   one: `-m gemini-2.5-flash-lite`, `-m gpt-5.4-nano`, `-m openai/gpt-oss-20b`.
+   Reasoning models spend most of their time in a `reasoning` field you never see.
+2. **Turn the thinking down** where the gateway supports it:
+   ```toml
+   [providers.cline.params]
+   reasoning_effort = "low"
+   ```
+3. **Cap the wait:** `--timeout 30` instead of sitting on the 120s default.
+4. **Keep the cache warm:** the first run of a session pays for the project and
+   style layers; afterwards you get `cache: 2 hit(s)` and a smaller prompt.
 
 ## Limitations, honestly
 

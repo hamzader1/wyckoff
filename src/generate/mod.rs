@@ -41,6 +41,10 @@ pub struct Outcome {
     pub repaired: bool,
     /// The model ran out of output room.
     pub truncated: bool,
+    /// Paths in the change, for the interactive report.
+    pub staged_paths: Vec<String>,
+    /// Time spent waiting on the provider.
+    pub elapsed: std::time::Duration,
 }
 
 fn nothing_to_do(source: DiffSource) -> Error {
@@ -116,15 +120,29 @@ pub fn run(git: &Git, config: &Config, options: &Options) -> Result<Outcome> {
             request: Some(request),
             repaired: false,
             truncated: false,
+            staged_paths: staged_paths.clone(),
+            elapsed: std::time::Duration::ZERO,
         });
     }
 
-    let resolved = config.resolved(&options.provider, options.model.as_deref())?;
+    let mut resolved = config.resolved(&options.provider, options.model.as_deref())?;
+    if let Some(timeout) = options.timeout_secs {
+        resolved.timeout_secs = timeout;
+    }
     meta.provider = resolved.name.clone();
     meta.model = resolved.model.clone();
     let provider = crate::llm::build(&resolved);
     meta.model = provider.model().to_string();
     meta.provider = provider.name().to_string();
+
+    // The wait is the slow part of this tool, so make it visible rather than
+    // looking like a hang. The spinner is a no-op when stderr is not a terminal.
+    let spinner = crate::ui::Spinner::start("analyzing the change");
+    let started = std::time::Instant::now();
+    let asked = asking::ask_model(provider.as_ref(), &request, &diff, options, &style);
+    let elapsed = started.elapsed();
+    drop(spinner);
+    meta.analysis_secs = elapsed.as_secs_f64();
 
     let ModelOutcome {
         msg,
@@ -132,7 +150,7 @@ pub fn run(git: &Git, config: &Config, options: &Options) -> Result<Outcome> {
         usage,
         repaired,
         truncated,
-    } = asking::ask_model(provider.as_ref(), &request, &diff, options, &style)?;
+    } = asked?;
 
     meta.usage = usage;
 
@@ -144,5 +162,7 @@ pub fn run(git: &Git, config: &Config, options: &Options) -> Result<Outcome> {
         request: None,
         repaired,
         truncated,
+        staged_paths,
+        elapsed,
     })
 }
